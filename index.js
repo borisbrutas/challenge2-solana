@@ -49,12 +49,18 @@ const createConnection = () => {
     return new Connection(clusterApiUrl("devnet"), "confirmed");
 }
 
+const getBalance = async (connection, wallet) => {
+    const walletBalance = await connection.getBalance(
+        new PublicKey(wallet.publicKey)
+    );
+
+    return parseInt(walletBalance) / LAMPORTS_PER_SOL;
+}
+
 const airDropSol = async (privateKey) => {
 
     var connection = createConnection();
-
     var wallet = Keypair.fromSecretKey(privateKey);
-
     var publicKey = new PublicKey(wallet.publicKey).toString();
 
     console.log("Airdropping Sol to", publicKey);
@@ -72,14 +78,42 @@ const airDropSol = async (privateKey) => {
         signature: airDropSignature
     });    
 
-    console.log("Completed airdrop to", publicKey);
-    
-    const walletBalance = await connection.getBalance(
-        new PublicKey(wallet.publicKey)
+    console.log("Completed airdrop to", publicKey);    
+    console.log(`Wallet balance: ${getBalance(connection, wallet)} SOL`);
+};
+
+const computeAndTransferSol = async (fromWallet, toWallet) => {
+    var fromWallet = Keypair.fromSecretKey(fromWallet);
+    var toWallet = Keypair.fromSecretKey(toWallet);
+    var connection = await createConnection();
+
+    var fromBalance = await getBalance(connection, fromWallet);
+    var toBalance = await getBalance(connection, toWallet);
+
+    console.log(`Balances: \nfrom ${fromBalance} \nto ${toBalance}`);
+    console.log("Starting transfer");
+
+    var transaction = new Transaction().add(
+        SystemProgram.transfer({
+            fromPubkey: fromWallet.publicKey,
+            toPubkey: toWallet.publicKey,
+            lamports: (fromBalance/2) * LAMPORTS_PER_SOL
+        })
     );
 
-    console.log(`Wallet balance: ${parseInt(walletBalance) / LAMPORTS_PER_SOL} SOL`);
-}
+    // Sign transaction
+    var signature = await sendAndConfirmTransaction(
+        connection,
+        transaction,
+        [fromWallet]
+    );
+
+    console.log('Signature is ', signature);
+    fromBalance = await getBalance(connection, fromWallet);
+    toBalance = await getBalance(connection, toWallet);
+
+    console.log(`New balances: \nfrom ${fromBalance} \nto ${toBalance}`);
+};
 
 //console.log(createWallet());
-airDropSol(fromWallet);
+computeAndTransferSol(fromWallet, toWallet);
